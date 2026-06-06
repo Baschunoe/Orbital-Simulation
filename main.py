@@ -1,24 +1,23 @@
+from numpy import atan2
+import numpy as np
+
+from src.physics.constants import EARTH_RADIUS
 from src.simulation.satellite import Satellite
 from src.simulation.propagator import step
-from src.visualization.plot_2D import plot_orbit
+from src.visualization.plot_2D import animate_orbit
 
-trajectory = []
+
+start_x = 7000000
+start_y = 0
+start_angle = atan2(start_y, start_x)
 
 sat = Satellite(
-
-    position=[7000000, 0],
-
-    velocity=[0,9000]
+    position=[start_x, start_y],
+    velocity=[0, 8000]
 )
 
-dt = 0.1
+dt = 10
 
-for i in range(200000):
 
-    trajectory.append(
-        sat.position.copy()
-    )
-
-    step(sat, dt)
-
-plot_orbit(trajectory)
+# 🚀 ONLY THIS RUNS
+animate_orbit(sat, step, dt)
