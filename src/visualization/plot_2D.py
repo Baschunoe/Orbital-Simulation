@@ -3,50 +3,53 @@ import numpy as np
 from numpy import atan2
 from matplotlib.ticker import MaxNLocator
 from matplotlib import animation
+import copy 
 
 from src.physics.constants import EARTH_RADIUS, KM
+from skimage.measure import EllipseModel
 
 
-def plot_orbit(trajectory):
+# def plot_orbit(trajectory):
 
-    trajectory = np.array(trajectory) * KM
+#     trajectory = np.array(trajectory) * KM
 
-    fig, ax = plt.subplots(figsize=(8, 8))
+#     ax = plt.subplots(figsize=(8, 8))
 
-    ax.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory")
+#     ax.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory")
 
-    earth = plt.Circle(
-        (0, 0),
-        EARTH_RADIUS * KM,
-        color='blue',
-        alpha=0.5,
-        label="Earth"
-    )
-    ax.add_patch(earth)
+#     earth = plt.Circle(
+#         (0, 0),
+#         EARTH_RADIUS * KM,
+#         color='blue',
+#         alpha=0.5,
+#         label="Earth"
+#     )
+#     ax.add_patch(earth)
 
-    ax.scatter(trajectory[-1, 0], trajectory[-1, 1], label="Satellite")
+#     ax.scatter(trajectory[-1, 0], trajectory[-1, 1], label="Satellite")
 
-    limit = np.max(np.linalg.norm(trajectory, axis=1))
-    scale = 1 + 1 / (1 + limit / 1e7)
-    limit *= scale
+#     limit = np.max(np.linalg.norm(trajectory, axis=1))
+#     scale = 1 + 1 / (1 + limit / 1e7)
+#     limit *= scale
 
-    ax.set_xlim(-limit, limit)
-    ax.set_ylim(-limit, limit)
+#     ax.set_xlim(-limit, limit)
+#     ax.set_ylim(-limit, limit)
 
-    ax.set_aspect("equal")
+#     ax.set_aspect("equal")
 
-    ax.xaxis.set_major_locator(MaxNLocator(6))
-    ax.yaxis.set_major_locator(MaxNLocator(6))
+#     ax.xaxis.set_major_locator(MaxNLocator(6))
+#     ax.yaxis.set_major_locator(MaxNLocator(6))
 
-    ax.set_xlabel("x [km]")
-    ax.set_ylabel("y [km]")
+#     ax.set_xlabel("x [km]")
+#     ax.set_ylabel("y [km]")
 
-    ax.legend()
-    plt.show()
+#     ax.legend()
+#     plt.show()
 
 
 def animate_orbit(sat, step, dt):
 
+    max_points = 50
     trajectory = []
 
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -69,67 +72,107 @@ def animate_orbit(sat, step, dt):
 
     ax.set_xlabel("x [km]")
     ax.set_ylabel("y [km]")
-
     ax.legend()
 
+    info_label = ax.text(
+        0.05,
+        0.95,
+        "",
+        fontsize=12,
+        transform=ax.transAxes,
+        verticalalignment="top"
+    )
+
     start_x, start_y = sat.position
-    start_angle = np.arctan2(start_y, start_x)
 
     iterations = 0
-    iterations_breakout = 0
-    running = True
 
-    base = np.linalg.norm(sat.position) * KM
-    base = base if base > 0 else 1
-    ax.set_xlim(-base * 2, base * 2)
-    ax.set_ylim(-base * 2, base * 2)
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(-1, 1)
 
-    ani = None
-
-    def update(_):
-
-        nonlocal iterations, iterations_breakout, running, ani
-
-        if not running:
-            return line, point
+    # -----------------------------
+    # PHYSICS SIMULATION PHASE
+    # -----------------------------
+    while True:
 
         iterations += 1
 
         step(sat, dt)
 
-        trajectory.append(sat.position.copy())
+        trajectory.append(sat.position.copy() * KM)
 
-        traj = np.array(trajectory) * KM
+        if np.allclose(sat.position, [start_x, start_y], atol=10000) and iterations > 1:
+            print("Orbit completed after " + str(iterations) + " iterations.")
+            break
 
-        line.set_data(traj[:, 0], traj[:, 1])
-        point.set_offsets(traj[-1])
+        elif np.linalg.norm(sat.position) <= EARTH_RADIUS:
+            print("Satellite has crashed into Earth after " + str(iterations) + " iterations.")
+            break
 
-        limit = np.max(np.linalg.norm(traj, axis=1))
-        scale = 1 + 1 / (1 + limit / 1e7)
-        limit *= scale
+        if iterations > 200000:
+            print("Max iterations reached.")
+            break
 
-        ax.set_xlim(-limit, limit)
-        ax.set_ylim(-limit, limit)
+    trajectory = np.array(trajectory)
 
-        if np.allclose(sat.position, [start_x, start_y], atol=10000) and iterations > 1: 
-            print("Orbit completed after " + str(iterations) + " iterations.") 
-            print("Final position: " + str(sat.position[0])) 
-            
-            running = False 
-        elif np.linalg.norm(sat.position) <= EARTH_RADIUS: 
-            print("Satellite has crashed into Earth after " + str(iterations) + " iterations.") 
-            print("Final position: " + str(sat.position[0])) 
-            
-            running = False 
-        elif np.abs(round(start_angle, 10) - round(atan2(sat.position[1], sat.position[0]), 10)) == 0 and iterations > 1: 
-            iterations_breakout = iterations 
+    # -----------------------------
+    # ELLIPSE FITTING PHASE (UPDATED API FIX)
+    # -----------------------------
+    model = EllipseModel.from_estimate(trajectory)
 
-        if iterations == 2 * iterations_breakout: 
-            print("Satellite has escaped Earth's gravity after " + str(iterations) + " iterations.") 
-            
-            running = False
+    xc, yc = model.center
+    a, b = model.axis_lengths
+    theta = model.theta
 
-        return line, point
+    # -----------------------------
+    # AUTO CENTER + ZOOM FIX
+    # -----------------------------
+    margin = 1.3 * max(a, b)
+
+    ax.set_xlim(xc - margin, xc + margin)
+    ax.set_ylim(yc - margin, yc + margin)
+
+    # -----------------------------
+    # ANIMATION PHASE (REAL PHYSICS)
+    # -----------------------------
+
+    crashed = False
+    finished = False
+
+    sat_animation = copy.deepcopy(sat)
+
+    def update(_):
+
+        nonlocal crashed, finished, sat_animation
+
+        if finished:
+            return line, point, info_label
+
+        vis_speedup = 10
+
+        for _ in range(vis_speedup):
+
+            step(sat_animation, dt)
+
+            if np.linalg.norm(sat_animation.position) <= EARTH_RADIUS:
+                print("Satellite has crashed into Earth during animation.")
+                crashed = True
+                finished = True
+                
+
+        # trajectory stays from pre-sim (correct)
+        line.set_data(trajectory[:, 0], trajectory[:, 1])
+
+        # live satellite from animation copy
+        x, y = sat_animation.position * KM
+        point.set_offsets([x, y])
+
+        info_label.set_text(
+            f"Speed: {np.linalg.norm(sat_animation.velocity):.0f} m/s\n"
+            f"Center: ({xc:.0f}, {yc:.0f}) km"
+        )
+
+        return line, point, info_label
 
     ani = animation.FuncAnimation(
         fig,
