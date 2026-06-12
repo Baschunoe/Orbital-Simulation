@@ -4,6 +4,7 @@ from numpy import atan2
 from matplotlib.ticker import MaxNLocator
 from matplotlib import animation
 from matplotlib.widgets import Button  
+import matplotlib.gridspec as gridspec
 
 from src.simulation.satellite import Satellite
 from src.physics.constants import EARTH_RADIUS, KM, G, EARTH_MASS
@@ -15,7 +16,14 @@ def animate_orbit(sat, step, dt):
     distance = []
     velocity = []
     
-    fig, ax = plt.subplots(figsize=(8, 8))
+    # --- ADDED: GridSpec Layout ---
+    fig = plt.figure(figsize=(14, 8))
+    gs = gridspec.GridSpec(2, 2, width_ratios=[2, 1])
+    
+    ax = fig.add_subplot(gs[:, 0]) # Main orbit plot
+    ax_dist = fig.add_subplot(gs[0, 1]) # Altitude plot
+    ax_vel = fig.add_subplot(gs[1, 1]) # Velocity plot
+    # ------------------------------
 
     earth = plt.Circle(
         (0, 0),
@@ -87,6 +95,26 @@ def animate_orbit(sat, step, dt):
     distance = np.array(distance)
     velocity = np.array(velocity)
     
+    # --- ADDED: Prepare Time and Speed arrays for the plots ---
+    time_data = np.arange(len(trajectory)) * dt
+    speed_data = np.linalg.norm(velocity, axis=1) / 1000 # Speed in km/s
+    
+    # Setup Altitude Plot
+    ax_dist.set_title("Altitude over Time")
+    ax_dist.set_ylabel("Altitude [km]")
+    ax_dist.set_xlim(0, time_data[-1])
+    ax_dist.set_ylim(min(distance) * 0.9, max(distance) * 1.1)
+    line_dist, = ax_dist.plot([], [], color='green')
+
+    # Setup Velocity Plot
+    ax_vel.set_title("Velocity over Time")
+    ax_vel.set_ylabel("Velocity [km/s]")
+    ax_vel.set_xlabel("Time [s]")
+    ax_vel.set_xlim(0, time_data[-1])
+    ax_vel.set_ylim(min(speed_data) * 0.9, max(speed_data) * 1.1)
+    line_vel, = ax_vel.plot([], [], color='purple')
+    # ----------------------------------------------------------
+
     line.set_data(trajectory[:, 0], trajectory[:, 1])
 
 
@@ -157,11 +185,11 @@ def animate_orbit(sat, step, dt):
         nonlocal finished, animation_iterations
 
         if finished:
-            return line, point, info_label
+            return line, point, info_label, g_vector, line_dist, line_vel
 
         if animation_iterations >= len(trajectory):
             finished = True
-            return line, point, info_label
+            return line, point, info_label, g_vector, line_dist, line_vel
 
         x, y = trajectory[animation_iterations]
         point.set_offsets([[x, y]])
@@ -198,12 +226,17 @@ def animate_orbit(sat, step, dt):
             f"Apogee, Perigee:      {apogee:.2f}km, {perigee:.2f}km"
         )       
 
+        # --- ADDED: Update the telemetry lines up to current animation frame ---
+        line_dist.set_data(time_data[:animation_iterations], distance[:animation_iterations])
+        line_vel.set_data(time_data[:animation_iterations], speed_data[:animation_iterations])
+        # -----------------------------------------------------------------------
+
         if animation_iterations == len(trajectory) - 1:
             animation_iterations += 1
         else:
             animation_iterations = min(animation_iterations + animation_speed_multiplier, len(trajectory) - 1)
 
-        return line, point, info_label, g_vector
+        return line, point, info_label, g_vector, line_dist, line_vel
 
     ani = animation.FuncAnimation(
         fig,
@@ -218,7 +251,9 @@ def animate_orbit(sat, step, dt):
         ani.frame_seq = ani.new_frame_seq()  # Reset the internal frame sequence generator
         ani.event_source.start()
 
-    button_ax = plt.axes([0.45, 0.05, 0.12, 0.05]) 
+    # Slightly adjusted position for button to fit the new figure size
+    plt.subplots_adjust(bottom=0.15)
+    button_ax = plt.axes([0.45, 0.05, 0.1, 0.05]) 
     restart_button = Button(button_ax, 'Restart')
     restart_button.on_clicked(restart_animation)
 

@@ -1,46 +1,29 @@
 import numpy as np
-from scipy.integrate import solve_ivp
 from src.physics.gravity import gravitational_acceleration
 
-def orbit_differential_equation(t, y):
-    """
-    Die Differentialgleichung für den Löser.
-    t: aktuelle Zeit (wird von RK45 intern genutzt)
-    y: Zustandsvektor [rx, ry, rz, vx, vy, vz]
-    """
-    # 1. Zustand entpacken (Annahme: 3D-Simulation)
-    position = y[:2]
-    velocity = y[2:]
-    
-    # 2. Beschleunigung mit deiner vorhandenen Funktion berechnen
-    accel = gravitational_acceleration(position)
-    
-    # 3. Ableitung zurückgeben: [Geschwindigkeit, Beschleunigung]
-    # np.concatenate macht aus den zwei 3er-Arrays ein flaches 6er-Array
-    return np.concatenate((velocity, accel))
-
-
 def step(satellite, dt):
-    """
-    Bewegt den Satelliten um die Zeit dt in die Zukunft mittels RK45.
-    """
-    # 1. Den aktuellen Zustand in EINEN flachen Vektor packen
-    y0 = np.concatenate((satellite.position, satellite.velocity))
+    # Skip scipy solve_ivp for better performance
+
+    pos = satellite.position
+    vel = satellite.velocity
     
-    # 2. Das Anfangswertproblem von t=0 bis t=dt lösen
-    # solve_ivp verwendet standardmäßig RK45
-    solution = solve_ivp(
-        fun=orbit_differential_equation, 
-        t_span=(0, dt), 
-        y0=y0,
-        # optional: atol und rtol anpassen für mehr/weniger Präzision
-        # rtol=1e-6, atol=1e-9 
-    )
+    # Helper to get velocity and acceleration
+    def get_derivatives(p, v):
+        # Return velocity (dp/dt) and acceleration (dv/dt)
+        return v, gravitational_acceleration(p)
+
+    # RK4 Step 1
+    v1, a1 = get_derivatives(pos, vel)
     
-    # 3. Den neuen Zustand (am Ende des Zeitschritts dt) extrahieren.
-    # solution.y enthält alle internen Schritte. Wir wollen den allerletzten:
-    new_y = solution.y[:, -1]
+    # RK4 Step 2
+    v2, a2 = get_derivatives(pos + v1 * dt / 2, vel + a1 * dt / 2)
     
-    # 4. Werte wieder an das Satelliten-Objekt zurückgeben
-    satellite.position = new_y[:2]
-    satellite.velocity = new_y[2:]
+    # RK4 Step 3
+    v3, a3 = get_derivatives(pos + v2 * dt / 2, vel + a2 * dt / 2)
+    
+    # RK4 Step 4
+    v4, a4 = get_derivatives(pos + v3 * dt, vel + a3 * dt)
+
+    # Calculate final state
+    satellite.position = pos + (dt / 6.0) * (v1 + 2*v2 + 2*v3 + v4)
+    satellite.velocity = vel + (dt / 6.0) * (a1 + 2*a2 + 2*a3 + a4)
