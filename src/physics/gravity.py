@@ -6,4 +6,4 @@ def gravitational_acceleration(position):
 
     r = np.linalg.norm(position)
 
-    return -G * EARTH_MASS / r**3 * position
+    return - (G * EARTH_MASS) * (position/ r**3)

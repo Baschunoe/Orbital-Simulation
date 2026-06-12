@@ -13,7 +13,7 @@ start_angle = atan2(start_y, start_x)
 
 sat = Satellite(
     position=[start_x, start_y],
-    velocity=[1000, 9000],
+    velocity=[0, 9000],
     distance_from_earth=np.linalg.norm([start_x, start_y]) - EARTH_RADIUS,
     angle=start_angle
 )
