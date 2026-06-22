@@ -4,7 +4,8 @@ import numpy as np
 from src.physics.constants import EARTH_RADIUS
 from src.simulation.satellite import Satellite
 from src.simulation.propagator import step
-from src.visualization.plot_2D import animate_orbit
+# from src.visualization.plot_2D import animate_orbit
+from src.visualization.plot import animate_orbit
 
 
 start_x = EARTH_RADIUS + 408000
