@@ -1,73 +1,26 @@
-import matplotlib.pyplot as plt
+import sys
 import numpy as np
-from numpy import atan2
-from matplotlib.ticker import MaxNLocator
-from matplotlib import animation
-from matplotlib.widgets import Button  
-import matplotlib.gridspec as gridspec
+import pyqtgraph as pg
+from PyQt6 import QtWidgets, QtCore, QtGui
+from PyQt6.QtGui import QPixmap, QBrush, QColor
 
+# Your local imports
 from src.simulation.satellite import Satellite
 from src.physics.constants import EARTH_RADIUS, KM, G, EARTH_MASS
 
 def animate_orbit(sat, step, dt):
-    
-    trajectory = []
-    angle = []
-    distance = []
-    velocity = []
-    
-    # --- GridSpec Layout ---
-    fig = plt.figure(figsize=(14, 8))
-    gs = gridspec.GridSpec(2, 2, width_ratios=[2, 1])
-    
-    ax = fig.add_subplot(gs[:, 0]) # Main orbit plot
-    ax_dist = fig.add_subplot(gs[0, 1]) # Altitude plot
-    ax_vel = fig.add_subplot(gs[1, 1]) # Velocity plot
-
-    earth = plt.Circle(
-        (0, 0),
-        EARTH_RADIUS * KM,
-        color='blue',
-        alpha=0.5,
-        label="Earth"
-    )
-    ax.add_patch(earth)
-
-    line, = ax.plot([], [], label="Trajectory")
-    point = ax.scatter([], [], label="Satellite")
-    g_vector = ax.quiver([], [], [], [], color='red', scale=40, width=0.005, label="Gravity (g)")
-
-
-    ax.set_aspect("equal") 
-    ax.xaxis.set_major_locator(MaxNLocator(6)) 
-    ax.yaxis.set_major_locator(MaxNLocator(6))
-
-    ax.set_xlabel("x [km]")
-    ax.set_ylabel("y [km]")
-    
-    info_label = ax.text(
-        0.05,
-        0.95,
-        "",
-        fontsize=12,
-        transform=ax.transAxes, 
-        verticalalignment="top",
-        fontname='monospace'
-    )
-
-    start_x, start_y = sat.position
-    iterations = 0
-
-    ax.set_xlim(-1, 1) 
-    ax.set_ylim(-1, 1)
-
     # -----------------------------
     # 1. PHYSICS SIMULATION 
     # -----------------------------
+    trajectory = []
+    distance = []
+    velocity = []
+    
+    start_x, start_y = sat.position
+    iterations = 0
 
     print("Simulating orbit... Please wait.")
     while True:
-
         iterations += 1
         step(sat, dt) 
         sat.update_distance()
@@ -77,19 +30,17 @@ def animate_orbit(sat, step, dt):
         velocity.append(sat.velocity.copy())
         
         if np.allclose(sat.position, [start_x, start_y], atol=10000) and iterations > 1:
-            print("Orbit completed after " + str(iterations) + " iterations.")
+            print(f"Orbit completed after {iterations} iterations.")
             break
-
         elif np.linalg.norm(sat.position) <= EARTH_RADIUS:
-            print("Satellite has crashed into Earth after " + str(iterations) + " iterations.")
+            print(f"Satellite has crashed into Earth after {iterations} iterations.")
             break
-
         if iterations > 10000000:
             print("Max iterations reached.")
             break
-    
+
     # -----------------------------
-    # 2. PRE-CALCULATE ALL TELEMETRY (The Speed Hack)
+    # 2. PRE-CALCULATE ALL TELEMETRY
     # -----------------------------
     print("Calculating telemetry arrays...")
     
@@ -97,50 +48,26 @@ def animate_orbit(sat, step, dt):
     distance = np.array(distance)
     velocity = np.array(velocity)
     
-    # Basic Time and Speed
     time_data = np.arange(len(trajectory)) * dt
-    v_ms_data = np.linalg.norm(velocity, axis=1) # Speed in m/s
-    speed_data = v_ms_data / 1000                # Speed in km/s
-    speed_kmh_data = speed_data * 3600           # Speed in km/h
+    v_ms_data = np.linalg.norm(velocity, axis=1) 
+    speed_data = v_ms_data / 1000                
+    speed_kmh_data = speed_data * 3600           
     
-    # Radius in meters
     r_meters_data = distance * 1000 + EARTH_RADIUS
     
-    # Specific Energy
     energy_j_kg_data = (v_ms_data**2 / 2) - ((G * EARTH_MASS) / r_meters_data)
     energy_mj_kg_data = energy_j_kg_data / 1_000_000
     
-    # Specific Angular Momentum (np.cross on arrays returns the cross product for every step at once)
     momentum_data = np.abs(np.cross(trajectory * 1000, velocity))
     
-    # Gravitational Acceleration Vector
     g_mag_data = (G * EARTH_MASS) / (r_meters_data**2)
-    # np.newaxis to divide the 2D trajectory array by the 1D radius array
     unit_vector_data = (-trajectory * 1000) / r_meters_data[:, np.newaxis] 
     grav_accel_data = g_mag_data[:, np.newaxis] * unit_vector_data
     grav_accel_norm_data = np.linalg.norm(grav_accel_data, axis=1)
 
-    # Setup Altitude Plot
-    ax_dist.set_title("Altitude over Time")
-    ax_dist.set_ylabel("Altitude [km]")
-    ax_dist.set_xlim(0, time_data[-1])
-    ax_dist.set_ylim(min(distance) * 0.9, max(distance) * 1.1)
-    line_dist, = ax_dist.plot([], [], color='green')
-
-    # Setup Velocity Plot
-    ax_vel.set_title("Velocity over Time")
-    ax_vel.set_ylabel("Velocity [km/s]")
-    ax_vel.set_xlabel("Time [s]")
-    ax_vel.set_xlim(0, time_data[-1])
-    ax_vel.set_ylim(min(speed_data) * 0.9, max(speed_data) * 1.1)
-    line_vel, = ax_vel.plot([], [], color='purple')
-
-    line.set_data(trajectory[:, 0], trajectory[:, 1])
-
     # -----------------------------
-    # 3. ORBITAL MECHANICS  
+    # 3. ORBITAL MECHANICS 
     # -----------------------------
-
     index_peri = np.argmin(distance) 
     index_apo = np.argmax(distance)
 
@@ -159,14 +86,9 @@ def animate_orbit(sat, step, dt):
     b = np.sqrt(max(0, a**2 - c**2)) 
 
     theta = np.arctan2(vec_peri[1], vec_peri[0]) 
-
     e = c/a 
 
     print(f"Calculated True Orbital parameters:\n Center: ({xc:.2f}, {yc:.2f}) km\n Semi-major axis: {a:.2f} km\n Semi-minor axis: {b:.2f} km\n Rotation angle: {np.degrees(theta):.2f}°")
-
-    ax.scatter(xc, yc, color='black', alpha=0.5, marker='x', label="Orbit Center")
-    ax.plot([xc, xc + a*np.cos(theta)], [yc, yc + a*np.sin(theta)], linestyle=':', color='green', alpha=0.5, label="a")
-    ax.plot([xc, xc + b*np.cos(theta + np.pi/2)], [yc, yc + b*np.sin(theta + np.pi/2)], linestyle=':', color='red', alpha=0.5, label="b")
 
     diffs = np.diff(trajectory, axis=0)
     step_lengths = np.linalg.norm(diffs, axis=1)
@@ -176,84 +98,216 @@ def animate_orbit(sat, step, dt):
     orbit_period = 2 * np.pi * np.sqrt(((a * 1000)**3) / (G * EARTH_MASS))
 
     # -----------------------------
-    # 4. AUTO CENTER + ZOOM FIX
+    # 4. PYQTGRAPH UI SETUP (MODERN OVERHAUL)
     # -----------------------------
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv)
 
+    # --- Modern UI Styling (QSS) ---
+    app.setStyleSheet("""
+        QMainWindow {
+            background-color: #0B0F19; /* Deep Space Slate */
+        }
+        QPushButton {
+            background-color: #1E293B;
+            color: #E2E8F0;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        QPushButton:hover {
+            background-color: #2DD4BF; /* Teal Glow */
+            color: #0B0F19;
+            border: 1px solid #2DD4BF;
+        }
+        QPushButton:pressed {
+            background-color: #14B8A6;
+        }
+    """)
+
+    # Global pyqtgraph settings for a soulful look
+    pg.setConfigOptions(antialias=True)
+    pg.setConfigOption('background', '#0B0F19')
+    pg.setConfigOption('foreground', '#8A9AB2')
+    pg.setConfigOptions(useOpenGL=True)
+
+    win = QtWidgets.QMainWindow()
+    win.setWindowTitle("Orbital Dynamics Visualization")
+    win.resize(1400, 850)
+    
+    central_widget = QtWidgets.QWidget()
+    win.setCentralWidget(central_widget)
+    main_layout = QtWidgets.QVBoxLayout(central_widget)
+    main_layout.setContentsMargins(20, 20, 20, 20)
+    main_layout.setSpacing(15)
+    
+    glw = pg.GraphicsLayoutWidget()
+    main_layout.addWidget(glw)
+    
+    # Configure Axes fonts
+    axis_font = QtGui.QFont("Segoe UI", 10)
+    
+    ax = glw.addPlot(row=0, col=0, rowspan=2, title="Trajectory Overview")
+    ax_dist = glw.addPlot(row=0, col=1, title="Altitude Over Time")
+    ax_vel = glw.addPlot(row=1, col=1, title="Velocity Over Time")
+
+    # Apply modern styling to titles
+    for plot in [ax, ax_dist, ax_vel]:
+        title_text = plot.titleLabel.text
+        plot.setTitle(f'<span style="font-family: Segoe UI; font-size: 14pt; color: #E2E8F0;">{title_text}</span>')
+
+    # --- Orbit Plot Configuration ---
+    ax.setAspectLocked(True)
+    ax.setLabel('bottom', "x-axis [km]")
+    ax.setLabel('left', "y-axis [km]")
+    ax.getAxis('bottom').setTickFont(axis_font)
+    ax.getAxis('left').setTickFont(axis_font)
+    ax.showGrid(x=True, y=True, alpha=0.1) # Very subtle grid
+    
     margin = 1.3 * max(a, b)
-    ax.set_xlim(xc - margin, xc + margin)
-    ax.set_ylim(yc - margin, yc + margin)
-    ax.legend()
+    ax.setXRange(xc - margin, xc + margin)
+    ax.setYRange(yc - margin, yc + margin)
+
+    # Draw Earth (Modern wireframe/blueprint style)
+    earth_radius_km = EARTH_RADIUS * KM
+    earth = QtWidgets.QGraphicsEllipseItem(-earth_radius_km, -earth_radius_km, earth_radius_km * 2, earth_radius_km * 2)
+    earth.setBrush(pg.mkBrush(QColor(30, 41, 59, 200))) # Dark transparent slate
+    earth.setPen(pg.mkPen(color='#3B82F6', width=2, style=QtCore.Qt.PenStyle.DashLine)) # Blue dashed edge
+    ax.addItem(earth)
+
+    # Draw full trajectory path (Smooth dark blue)
+    ax.plot(trajectory[:, 0], trajectory[:, 1], pen=pg.mkPen(color=(59, 130, 246, 150), width=1.5))
+
+    # Draw Center, a, and b axes (Subtle indicators)
+    ax.plot([xc], [yc], pen=None, symbol='+', symbolPen='#64748B', symbolSize=12)
+    ax.plot([xc, xc + a*np.cos(theta)], [yc, yc + a*np.sin(theta)], pen=pg.mkPen('#10B981', style=QtCore.Qt.PenStyle.DotLine, width=1))
+    ax.plot([xc, xc + b*np.cos(theta + np.pi/2)], [yc, yc + b*np.sin(theta + np.pi/2)], pen=pg.mkPen('#F59E0B', style=QtCore.Qt.PenStyle.DotLine, width=1))
+
+    # Animated elements
+    sat_point = ax.plot([], [], pen=None, symbol='o', symbolBrush='#2DD4BF', symbolSize=10, symbolPen=pg.mkPen('#0B0F19', width=2))
+    g_vector = ax.plot([], [], pen=pg.mkPen(color='#EF4444', width=2)) # Red gravity vector
+    
+    # Telemetry Text Label (Modern Monospace)
+    info_label = pg.TextItem("", color='#E2E8F0', anchor=(0, 0))
+    info_label.setFont(QtGui.QFont("Consolas", 11))
+    ax.addItem(info_label)
+    info_label.setPos(xc - margin*0.95, yc + margin*0.95)
+
+    # --- Altitude Plot Setup (Emerald Theme) ---
+    ax_dist.setLabel('left', "Altitude [km]")
+    ax_dist.setLabel('bottom', "Time [s]")
+    ax_dist.getAxis('bottom').setTickFont(axis_font)
+    ax_dist.getAxis('left').setTickFont(axis_font)
+    ax_dist.setXRange(0, time_data[-1])
+    ax_dist.setYRange(min(distance) * 0.9, max(distance) * 1.1)
+    ax_dist.disableAutoRange()
+    ax_dist.showGrid(x=True, y=True, alpha=0.1)
+    ax_dist.getAxis('left').setWidth(70)
+    
+    # Beautiful filled curve
+    curve_dist = ax_dist.plot(time_data, distance, pen=pg.mkPen(color='#10B981', width=2))
+    curve_dist.setFillLevel(min(distance) * 0.8)
+    curve_dist.setBrush(pg.mkBrush(QColor(16, 185, 129, 30))) # Transparent emerald fill
+    
+    dist_point = ax_dist.plot([], [], pen=None, symbol='o', symbolBrush='#10B981', symbolSize=8, symbolPen=pg.mkPen('#0B0F19', width=1))
+
+    # --- Velocity Plot Setup (Amber Theme) ---
+    ax_vel.setLabel('left', "Velocity [km/s]")
+    ax_vel.setLabel('bottom', "Time [s]")
+    ax_vel.getAxis('bottom').setTickFont(axis_font)
+    ax_vel.getAxis('left').setTickFont(axis_font)
+    ax_vel.setXRange(0, time_data[-1])
+    ax_vel.setYRange(min(speed_data) * 0.9, max(speed_data) * 1.1)
+    ax_vel.disableAutoRange()
+    ax_vel.showGrid(x=True, y=True, alpha=0.1)
+    ax_vel.getAxis('left').setWidth(70)
+    
+    # Beautiful filled curve
+    curve_vel = ax_vel.plot(time_data, speed_data, pen=pg.mkPen(color='#F59E0B', width=2))
+    curve_vel.setFillLevel(min(speed_data) * 0.8)
+    curve_vel.setBrush(pg.mkBrush(QColor(245, 158, 11, 30))) # Transparent amber fill
+    
+    vel_point = ax_vel.plot([], [], pen=None, symbol='o', symbolBrush='#F59E0B', symbolSize=8, symbolPen=pg.mkPen('#0B0F19', width=1))
+
+    # Restart Button Setup
+    button_layout = QtWidgets.QHBoxLayout()
+    restart_button = QtWidgets.QPushButton("RESTART SIMULATION")
+    restart_button.setFixedWidth(250)
+    restart_button.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+    button_layout.addStretch()
+    button_layout.addWidget(restart_button)
+    button_layout.addStretch()
+    main_layout.addLayout(button_layout)
 
     # -----------------------------
-    # 5. ANIMATION PHASE (READ AND DRAW ONLY)
+    # 5. ANIMATION PHASE 
     # -----------------------------
-
     finished = False
     animation_iterations = 0
-    
-    # Tweak this multiplier higher if you still want the satellite to fly faster!
-    animation_speed_multiplier = 10
+    ui_iterations = 0
+    animation_speed_multiplier = max(1, len(trajectory) // 1000)
 
-    def update(_):
-        nonlocal finished, animation_iterations
+    def update():
+        nonlocal finished, animation_iterations, ui_iterations
 
         if finished:
-            return line, point, info_label, g_vector, line_dist, line_vel
+            return
 
         if animation_iterations >= len(trajectory):
-            finished = True
-            return line, point, info_label, g_vector, line_dist, line_vel
+            animation_iterations = 0
+            return
 
-        # Fetch position
+        # Fetch positions
         x, y = trajectory[animation_iterations]
-        point.set_offsets([[x, y]])
+        sat_point.setData([x], [y])
+
+        current_time = time_data[animation_iterations]
+        dist_point.setData([current_time], [distance[animation_iterations]])
+        vel_point.setData([current_time], [speed_data[animation_iterations]])
 
         # Fetch gravity vector
         gx, gy = grav_accel_data[animation_iterations]
-        g_vector.set_offsets([[x, y]]) 
-        g_vector.set_UVC(gx, gy) 
+        quiver_scale = a * 0.05 
+        g_vector.setData([x, x + gx * quiver_scale], [y, y + gy * quiver_scale])
 
-        # Fetch data for label
-        info_label.set_text(
-            f"Speed:                {speed_kmh_data[animation_iterations]:,.0f} km/h\n"
-            f"Orbit height:         {(distance[animation_iterations]):,.0f} km\n"
-            f"Progress (Arc lenght):{angle[animation_iterations]*360:.2f}°\n"
-            f"Spec. Energy:         {energy_mj_kg_data[animation_iterations]:.2f} MJ/kg\n"    
-            f"Spec. Ang. Momentum:  {momentum_data[animation_iterations]:.2e} m^2/s\n"        
-            f"Gravitational acc.:   {grav_accel_norm_data[animation_iterations]:.2f} m/s^2\n"
-            f"Obrit Period:         {(orbit_period / (3600)):.2f} h\n"
-            f"Eccentricity:         {e:.2f}\n"
-            f"Apogee, Perigee:      {apogee:.2f}km, {perigee:.2f}km"
-        )       
-
-        # Update telemetry lines (using [::10] decimation to skip points and draw faster)
-        line_dist.set_data(time_data[:animation_iterations:10], distance[:animation_iterations:10])
-        line_vel.set_data(time_data[:animation_iterations:10], speed_data[:animation_iterations:10])
+        ui_iterations += 1
+        if ui_iterations % 2 == 0:
+            text_str = (
+                f"Speed                : {speed_kmh_data[animation_iterations]:,.0f} km/h\n"
+                f"Altitude             : {distance[animation_iterations]:,.0f} km\n"
+                f"Arc Progress         : {angle[animation_iterations]*360:.1f}°\n"
+                f"Spec. Energy         : {energy_mj_kg_data[animation_iterations]:.2f} MJ/kg\n"    
+                f"Ang. Momentum        : {momentum_data[animation_iterations]:.2e} m²/s\n"        
+                f"Gravitational Accel. : {grav_accel_norm_data[animation_iterations]:.2f} m/s²\n"
+                f"Orbit Period         : {(orbit_period / 3600):.2f} h\n"
+                f"Eccentricity         : {e:.3f}\n"
+                f"Apogee / Perigee     : {apogee:.0f} km / {perigee:.0f} km"
+            )
+            info_label.setText(text_str)
 
         if animation_iterations == len(trajectory) - 1:
             animation_iterations += 1
         else:
             animation_iterations = min(animation_iterations + animation_speed_multiplier, len(trajectory) - 1)
 
-        return line, point, info_label, g_vector, line_dist, line_vel
+    def restart_animation():
+        print("Restarting animation...")
+        nonlocal finished, animation_iterations
+        finished = False
+        animation_iterations = 0
 
-    print("Launching animation...")
-    ani = animation.FuncAnimation(
-        fig,
-        update,
-        frames=200000,
-        interval=1,
-        blit=True,
-    )
+    restart_button.clicked.connect(restart_animation)
 
-    def restart_animation(event):
-        print("Button pressed")
-        ani.frame_seq = ani.new_frame_seq()  
-        ani.event_source.start()
+    # Start QTimer for the animation loop
+    print("Launching animation UI...")
+    timer = QtCore.QTimer()
+    timer.timeout.connect(update)
+    timer.start(16) # ~60fps target
 
-    plt.subplots_adjust(bottom=0.15)
-    button_ax = plt.axes([0.45, 0.05, 0.1, 0.05]) 
-    restart_button = Button(button_ax, 'Restart')
-    restart_button.on_clicked(restart_animation)
-
-    plt.show()
+    win.show()
+    sys.exit(app.exec())
