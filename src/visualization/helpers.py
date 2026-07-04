@@ -52,13 +52,15 @@ def telemetry(trajectory3D, distance, velocity, dt):
     energy_j_kg_data = (v_ms_data**2 / 2) - ((G * EARTH_MASS) / r_meters_data)
     energy_mj_kg_data = energy_j_kg_data / 1_000_000
     
-    momentum_data = np.abs(np.cross(trajectory3D * 1000, velocity)) # Attention when switching to 3d - cross gives a vector in 3d instead of a z scalar
+    h_vectors = np.cross(trajectory3D * 1000, velocity)
+    momentum_data = np.linalg.norm(h_vectors, axis=1)
+    h = h_vectors[0]
     
     g_mag_data = (G * EARTH_MASS) / (r_meters_data**2)
     unit_vector_data = (-trajectory3D * 1000) / r_meters_data[:, np.newaxis] 
-    grav_accel_data = g_mag_data[:, np.newaxis] * unit_vector_data
-    grav_accel_norm_data = np.linalg.norm(grav_accel_data, axis=1)
+    grav_accel_data3D = g_mag_data[:, np.newaxis] * unit_vector_data
+    grav_accel_norm_data = np.linalg.norm(grav_accel_data3D, axis=1)
 
-    return time_data, speed_data, speed_kmh_data, energy_mj_kg_data, momentum_data, grav_accel_data, grav_accel_norm_data
+    return time_data, speed_data, speed_kmh_data, energy_mj_kg_data, momentum_data, grav_accel_data3D, grav_accel_norm_data, h
 
     

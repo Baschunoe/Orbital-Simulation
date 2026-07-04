@@ -7,14 +7,14 @@ from src.simulation.propagator import step
 from src.visualization.layout import animate_orbit
 
 
-start_x = EARTH_RADIUS + 408000
+start_x = EARTH_RADIUS + 427000
 start_y = 0
 start_z = 0
-start_angle = atan2(start_y, start_x, start_z)
+start_angle = 0 # fix later
 
 sat = Satellite(
     position=[start_x, start_y, start_z],
-    velocity=[0, 9000, 0],
+    velocity=[0, 4755, 5997],
     distance_from_earth=np.linalg.norm([start_x, start_y, start_z]) - EARTH_RADIUS,
     angle=start_angle
 )
