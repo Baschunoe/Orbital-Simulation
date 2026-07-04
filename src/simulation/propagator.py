@@ -2,8 +2,7 @@ import numpy as np
 from src.physics.gravity import gravitational_acceleration
 
 def step(satellite, dt):
-    # Skip scipy solve_ivp for better performance
-
+    
     pos = satellite.position
     vel = satellite.velocity
     

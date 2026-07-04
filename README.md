@@ -21,7 +21,7 @@ A real-time satellite orbit simulator built with **Python**, combining classical
 
 Orbital Simulation is an educational physics project that visualizes satellite motion around Earth using Newtonian gravity and numerical integration.
 
-The project focuses on implementing the underlying physics from scratch while presenting the results through a clean desktop interface with real-time visualizations and orbital analytics.
+The project focuses on implementing the underlying physics from scratch while presenting the results through a clean desktop interface with precalculated visualizations and orbital analytics.
 
 <br>
 
@@ -33,7 +33,7 @@ The project focuses on implementing the underlying physics from scratch while pr
 
 ### Simulation
 
-- Real-time orbit propagation
+- Orbit propagation
 - RK4 numerical integration
 - Newtonian gravity model
 - Configurable initial conditions
@@ -45,8 +45,7 @@ The project focuses on implementing the underlying physics from scratch while pr
 
 ### Visualization
 
-- Interactive 2D orbit view
-- 3D Earth rendering
+- Interactive 2D and 3D orbit view
 - Live trajectory tracking
 - Real-time telemetry
 - Dynamic orbital parameters
@@ -74,13 +73,13 @@ The simulator continuously computes important orbital characteristics including
 
 | Parameter | Description |
 |-----------|-------------|
-| Semi-major axis | Size of the orbit |
-| Semi-minor axis | Orbit geometry |
+| Semi-major axis | - |
+| Semi-minor axis | - |
 | Eccentricity | Shape of the orbit |
 | Perigee | Closest approach to Earth |
 | Apogee | Farthest distance from Earth |
-| Orbital Period | Estimated revolution time |
-| Velocity | Instantaneous orbital speed |
+| Orbital Period | Revolution time |
+| Velocity | Current orbital speed |
 | Angular Momentum | Conserved orbital quantity |
 | Specific Orbital Energy | Mechanical energy per unit mass |
 
@@ -105,7 +104,7 @@ Orbital-Simulation/
 
 <br>
 
-## Getting Started
+<!-- ## Getting Started
 
 Clone the repository
 
@@ -126,7 +125,7 @@ Run the application
 python main.py
 ```
 
-<br>
+<br> -->
 
 ## Simulation Model
 
@@ -137,8 +136,6 @@ The simulator assumes
 - No atmospheric drag
 - No third-body perturbations
 - Fourth-order Runge–Kutta integration
-
-This provides a good balance between computational performance and physical accuracy for educational purposes.
 
 <br>
 
@@ -160,14 +157,14 @@ This provides a good balance between computational performance and physical accu
 
 <br>
 
+- Real-time simulation
 - Multiple satellites
 - Lunar and planetary gravity
 - Atmospheric drag
 - Orbit maneuvers
-- Custom scenario editor
-- Time acceleration
-- Different numerical integrators
-- Real satellite data import
+- Orbit projection onto earth
+- RK45
+
 
 </details>
 
