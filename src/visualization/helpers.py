@@ -1,45 +1,50 @@
-import sys
 import numpy as np
-from PyQt6 import QtCore
-
-# Local imports
 from src.physics.constants import EARTH_RADIUS, KM, G, EARTH_MASS
+from src.simulation.propagator import propagate_orbit_rk45
 
-def load_arrays(sat, step, dt):
-    trajectory3D = []
-    distance = []
-    velocity = []
+# -----------------------------
+# EXACT ORBIT PERIOD
+# -----------------------------
+def calculate_orbit_period(pos, vel):
     
-    start_x, start_y, start_z = sat.position
-    iterations = 0
-
-    print("Simulating orbit... Please wait.")
-    while True:
-        iterations += 1
-        step(sat, dt) 
-        sat.update_distance()
-
-        trajectory3D.append(sat.position.copy() * KM)
-        distance.append(sat.distance_from_earth * KM)
-        velocity.append(sat.velocity.copy())
+    r = np.linalg.norm(pos)
+    v = np.linalg.norm(vel)
+    
+    # Specific orbital energy
+    epsilon = (v**2 / 2) - (G * EARTH_MASS / r)
+    
+    if epsilon >= 0:
+        return 1000000 
         
-        if np.allclose(sat.position, [start_x, start_y, start_z], atol=10000) and iterations > 1:
-            print(f"Orbit completed after {iterations} iterations.")
-            break
-        elif np.linalg.norm(sat.position) <= EARTH_RADIUS:
-            print(f"Satellite has crashed into Earth after {iterations} iterations.")
-            break
-        if iterations > 10000000:
-            print("Max iterations reached.")
-            break
+    a = - (G * EARTH_MASS) / (2 * epsilon)
+    period = 2 * np.pi * np.sqrt((a**3) / (G * EARTH_MASS))
+    
+    return period
 
-    trajectory3D = np.array(trajectory3D)
-    distance = np.array(distance)
-    velocity = np.array(velocity)
+# -----------------------------
+# LOAD ARRAYS
+# -----------------------------
+def load_arrays(sat, dt):
+    
+    # Calculate exact period to avoid infinite loops
+    period = calculate_orbit_period(sat.position, sat.velocity)
+    max_time = period
+    
+    # Run RK45 Propagator
+    positions, velocities = propagate_orbit_rk45(sat, dt, max_time)
+    
+    # Scale for visualization
+    trajectory3D = positions * KM
+    distances = np.linalg.norm(positions, axis=1)
+    distance_from_earth = (distances - EARTH_RADIUS) * KM
+    
+    return trajectory3D, distance_from_earth, velocities
 
-    return trajectory3D, distance, velocity
-
+# -----------------------------
+# TELEMETRY
+# -----------------------------
 def telemetry(trajectory3D, distance, velocity, dt):
+    
     print("Calculating telemetry arrays...")
     
     time_data = np.arange(len(trajectory3D)) * dt
@@ -62,5 +67,3 @@ def telemetry(trajectory3D, distance, velocity, dt):
     grav_accel_norm_data = np.linalg.norm(grav_accel_data3D, axis=1)
 
     return time_data, speed_data, speed_kmh_data, energy_mj_kg_data, momentum_data, grav_accel_data3D, grav_accel_norm_data, h
-
-    
